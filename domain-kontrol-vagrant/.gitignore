@@ -1,0 +1,6 @@
+.vagrant/
+venv
+*.log
+hosts.new
+*.code-workspace
+.vscode

@@ -1,0 +1,58 @@
+---
+- name: Setup Hosts Play
+  hosts: localhost
+  gather_facts: false
+  tasks:
+
+    - name: Set facts for the run
+      ansible.builtin.set_fact:
+        vm_name: domain
+        vm_network: '192.168.1.'
+
+    - name: Set facts for the command
+      ansible.builtin.set_fact:
+        vm_command: vagrant winrm $i -c "(Get-NetIPAddress -AddressFamily IPv4).IPAddress" | grep "{{ vm_network }}" | head -n 1 | tr -d '[:space:]'
+
+    - name: Gather hosts facts
+      ansible.builtin.shell:
+        cmd: |
+            set -o pipefail
+            for i in $(vagrant status | grep "running" | grep "{{ vm_name }}" | awk '{printf "%s ", $1}' | sed 's/ $//');
+            do
+                IP=$({{ vm_command }})
+                i=$(echo "$i" | tr -d '[:space:]')
+                echo "$IP $i"
+            done
+        executable: /bin/bash
+      register: output
+      changed_when: false
+      failed_when: output.rc != 0
+
+    - name: Append new hosts information
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        regexp: '{{ (item | split(" "))[-1] }}'
+        line: "{{ item }}"
+        backup: true
+      become: true
+      with_items:
+        - "{{ output.stdout_lines }}"
+      when:
+        - output.stdout_lines | length > 0
+
+    - name: Create A records in cloudflare
+      community.general.cloudflare_dns:
+        zone: "{{ lookup('ansible.builtin.env', 'CF_ZONE') }}"
+        record: '{{ (item | split(" "))[-1] }}'
+        type: A
+        value: '{{ (item | split(" "))[0] }}'
+        api_token: "{{ lookup('ansible.builtin.env', 'CF_TOKEN') }}"
+        solo: true
+      register: record
+      with_items:
+        - "{{ output.stdout_lines }}"
+      loop_control:
+        label: "Creating record for {{ item }}"
+      when:
+        - cloudflare | default('false') | bool # -e cloudflare=True
+        - output.stdout_lines | length > 0
