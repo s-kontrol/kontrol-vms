@@ -22,8 +22,10 @@ if (-Not (Get-Partition -DriveLetter $diskLetter -ErrorAction SilentlyContinue |
 Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
 Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
-# Check if .NET Framework 4.8 is installed. If not, install Chocolatey 2.0.0
+# Installs web server role
 Install-WindowsFeature -Name Web-Server -IncludeManagementTools
+
+# Check if .NET Framework 4.8 is installed. If not, install Chocolatey 2.0.0
 $dotNetVersion = Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full" -Name Version -ErrorAction SilentlyContinue
 
 if ($dotNetVersion -eq "4.8.0")
